@@ -4,16 +4,37 @@
 #include <cstddef>		// std::size_t, std::ptrdiff_t
 #include <memory>		// std::allocator
 #include <utility>		// std::move
+#include <vector>
 
-template < 
+template <
 	class T,
-	size_t compact_max_count = -1,
-	class allocator_type = std::allocator<T> >
+	size_t compact_max_size = -1,
+	typename small_size_type = uint8_t,
+	class allocator_type = std::allocator<T>,
+	class full_storage = std::vector<T, allocator_type> >
 class compact_vector
 {
+	static const size_t compact_default_capacity = (sizeof(full_storage) - sizeof(small_size_type)) / sizeof(T);
+
+	static const size_t compact_capacity = compact_max_size < 0 ? compact_default_capacity : compact_max_size;
+
+	struct compact_storage
+	{
+		small_size_type size = 0;
+		uint8_t buffer[compact_capacity * sizeof(T)];
+	};
+
+	union
+	{
+		compact_storage compact;
+		full_storage full;
+	};
+
 public:
-	typename T& reference;
-	typename const T& const_reference;
+	using iterator = T*;
+	using const_iterator = const T*;
+	using reverse_iterator = typename T*;
+	using const_reverse_iterator = const T*;
 
 	/// constructor: default
 	/*!
@@ -31,7 +52,7 @@ public:
 	/*!
 	Constructs a container with n elements. Each element is a copy of val.
 	*/
-	compact_vector(size_t n, const_reference val, const allocator_type& alloc = allocator_type());
+	compact_vector(size_t n, const T& val, const allocator_type& alloc = allocator_type());
 
 	/// constructor:: range
 	/*!
@@ -90,11 +111,11 @@ public:
 	/// assign: initializer list
 	void assign(std::initializer_list<T> il);
 
-	reference at(size_t n);
-	const_reference at(size_t n) const;
+	T& at(size_t n);
+	const T& at(size_t n) const;
 
-	reference back();
-	const_reference back() const;
+	T& back();
+	const T& back() const;
 
 	iterator begin() noexcept;
 	const_iterator begin() const noexcept;
@@ -128,16 +149,16 @@ public:
 	iterator erase(const_iterator position);
 	iterator erase(const_iterator first, const_iterator last);
 
-	reference front();
-	const_reference front() const;
+	T& front();
+	const T& front() const;
 
 	allocator_type get_allocator() const noexcept;
 
 	/// insert: single element
-	iterator insert(const_iterator position, const_reference val);
+	iterator insert(const_iterator position, const T& val);
 
 	/// insert: fill
-	iterator insert(const_iterator position, size_type n, const_reference val);
+	iterator insert(const_iterator position, size_t n, const T& val);
 
 	/// insert: range
 	template <class InputIterator>
@@ -147,9 +168,9 @@ public:
 	iterator insert(const_iterator position, T&& val);
 
 	/// initializer list
-	iterator insert(const_iterator position, initializer_list<T> il);
+	iterator insert(const_iterator position, std::initializer_list<T> il);
 
-	size_type max_size() const noexcept;
+	size_t max_size() const noexcept;
 
 	// operator=, copy
 	compact_vector& operator= (const compact_vector& x);
@@ -158,14 +179,14 @@ public:
 	compact_vector& operator= (compact_vector&& x);
 
 	// operator=, initializer list
-	compact_vector& operator= (initializer_list<T> il);
+	compact_vector& operator= (std::initializer_list<T> il);
 
-	reference operator[] (size_type n);
-	const_reference operator[] (size_type n) const;
+	T& operator[] (size_t n);
+	const T& operator[] (size_t n) const;
 
 	void pop_back();
 
-	void push_back(const_reference val);
+	void push_back(const T& val);
 	void push_back(T&& val);
 
 	reverse_iterator rbegin() noexcept;
@@ -174,18 +195,37 @@ public:
 	reverse_iterator rend() noexcept;
 	const_reverse_iterator rend() const noexcept;
 
-	void reserve(size_type n);
+	void reserve(size_t n);
 
-	void resize(size_type n);
-	void resize(size_type n, const_reference val);
+	void resize(size_t n);
+	void resize(size_t n, const T& val);
 
 	void shrink_to_fit();
 
-	size_type size() const noexcept;
+	size_t size() const noexcept;
 
 	void swap(compact_vector& x);
 
 private:
+
+	bool is_compact();
 };
+
+
+
+/// constructor: default
+template<class T, size_t compact_max_size, typename small_size_type, class allocator_type, class full_storage>
+compact_vector<T, compact_max_size, small_size_type, allocator_type, full_storage>::
+compact_vector(const allocator_type& alloc = allocator_type())
+{
+}
+
+
+/// constructor: default
+template<class T, size_t compact_max_size, typename small_size_type, class allocator_type, class full_storage>
+compact_vector<T, compact_max_size, small_size_type, allocator_type, full_storage>::
+compact_vector(size_t n)
+{
+}
 
 #endif // compact_vector_h__
