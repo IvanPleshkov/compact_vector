@@ -1,27 +1,57 @@
 #ifndef compact_vector_h__
 #define compact_vector_h__
 
-#include <cstddef>		// std::size_t, std::ptrdiff_t
-#include <memory>		// std::allocator
-#include <utility>		// std::move
+#include <cstddef>
+#include <memory>
+#include <utility>
 #include <vector>
+#include <limits>
 
 template <
 	class T,
-	size_t compact_max_size = -1,
+	int compact_max_size = -1,
 	typename small_size_type = uint8_t,
-	class allocator_type = std::allocator<T>,
-	class full_storage = std::vector<T, allocator_type> >
+	class allocator_type = std::allocator<T>>
 class compact_vector
 {
-	static const size_t compact_default_capacity = (sizeof(full_storage) - sizeof(small_size_type)) / sizeof(T);
+public:
+	struct full_storage
+	{
+		size_t capacity = 0;
+		T* begin = nullptr;
+		T* end = nullptr;
 
-	static const size_t compact_capacity = compact_max_size < 0 ? compact_default_capacity : compact_max_size;
+		T* get(size_t i)
+		{
+			return begin + i;
+		}
+
+		const T* get(size_t i) const
+		{
+			return begin + i;
+		}
+	};
+
+	static constexpr size_t T_size = sizeof(T);
+
+	static constexpr size_t compact_default_capacity = (sizeof(full_storage) - sizeof(small_size_type)) / T_size;
+
+	static constexpr size_t compact_capacity = compact_max_size < 0 ? compact_default_capacity : compact_max_size;
 
 	struct compact_storage
 	{
 		small_size_type size = 0;
 		uint8_t buffer[compact_capacity * sizeof(T)];
+
+		T* get(size_t i)
+		{
+			return ((T*)buffer) + i;
+		}
+
+		const T* get(size_t i) const
+		{
+			return ((T*)buffer) + i;
+		}
 	};
 
 	union
@@ -30,29 +60,40 @@ class compact_vector
 		full_storage full;
 	};
 
+	allocator_type allocator;
+
 public:
 	using iterator = T*;
 	using const_iterator = const T*;
-	using reverse_iterator = typename T*;
+	using reverse_iterator = T*;
 	using const_reverse_iterator = const T*;
 
 	/// constructor: default
 	/*!
 	Constructs an empty container, with no elements.
 	*/
-	explicit compact_vector(const allocator_type& alloc = allocator_type());
+	explicit compact_vector(const allocator_type& alloc = allocator_type())
+	{
+
+	}
 
 	/// constructor: fill
 	/*!
 	Constructs a container with n elements.
 	*/
-	explicit compact_vector(size_t n);
+	explicit compact_vector(size_t n)
+	{
+
+	}
 
 	/// constructor: fill
 	/*!
 	Constructs a container with n elements. Each element is a copy of val.
 	*/
-	compact_vector(size_t n, const T& val, const allocator_type& alloc = allocator_type());
+	compact_vector(size_t n, const T& val, const allocator_type& alloc = allocator_type())
+	{
+	
+	}
 
 	/// constructor:: range
 	/*!
@@ -60,19 +101,28 @@ public:
 	with each element emplace-constructed from its corresponding element in that range, in the same order.
 	*/
 	template <class InputIterator>
-	compact_vector(InputIterator first, InputIterator last, const allocator_type& alloc = allocator_type());
+	compact_vector(InputIterator first, InputIterator last, const allocator_type& alloc = allocator_type())
+	{
+	
+	}
 
 	/// constructor: copy
 	/*!
 	Constructs a container with a copy of each of the elements in x, in the same order.
 	*/
-	compact_vector(const compact_vector& x);
+	compact_vector(const compact_vector& x)
+	{
+
+	}
 
 	/// constructor: copy
 	/*!
 	Constructs a container with a copy of each of the elements in x, in the same order.
 	*/
-	compact_vector(const compact_vector& x, const allocator_type& alloc);
+	compact_vector(const compact_vector& x, const allocator_type& alloc)
+	{
+	
+	}
 
 	/// constructor: move
 	/*!
@@ -81,7 +131,10 @@ public:
 	Otherwise, no elements are constructed (their ownership is directly transferred).
 	x is left in an unspecified but valid state.
 	*/
-	compact_vector(compact_vector&& x);
+	compact_vector(compact_vector&& x)
+	{
+	
+	}
 
 	/// constructor: move
 	/*!
@@ -90,16 +143,25 @@ public:
 	Otherwise, no elements are constructed (their ownership is directly transferred).
 	x is left in an unspecified but valid state.
 	*/
-	compact_vector(compact_vector&& x, const allocator_type& alloc);
+	compact_vector(compact_vector&& x, const allocator_type& alloc)
+	{
+	
+	}
 
 	/// constructor: initializer list
 	/*!
 	Constructs a container with a copy of each of the elements in il, in the same order.
 	*/
-	compact_vector(std::initializer_list<T> il, const allocator_type& alloc = allocator_type());
+	compact_vector(std::initializer_list<T> il, const allocator_type& alloc = allocator_type())
+	{
+	
+	}
 
 	/// destructor
-	~compact_vector();
+	~compact_vector()
+	{
+		clear();
+	}
 
 	/// assign: range
 	template <class InputIterator>
@@ -114,11 +176,23 @@ public:
 	T& at(size_t n);
 	const T& at(size_t n) const;
 
-	T& back();
-	const T& back() const;
+	T& back()
+	{
+		return (*this)[size() - 1];
+	}
 
-	iterator begin() noexcept;
-	const_iterator begin() const noexcept;
+	const T& back() const
+	{
+		return (*this)[size() - 1];
+	}
+
+	iterator begin() noexcept
+	{
+	}
+
+	const_iterator begin() const noexcept
+	{
+	}
 
 	size_t capacity() const noexcept;
 
@@ -126,7 +200,8 @@ public:
 
 	const_iterator cend() const noexcept;
 
-	void clear() noexcept;
+	void clear() noexcept
+	{}
 
 	const_reverse_iterator crbegin() const noexcept;
 
@@ -206,26 +281,18 @@ public:
 
 	void swap(compact_vector& x);
 
-private:
+//private:
+public:
 
-	bool is_compact();
+	bool is_compact()
+	{
+		return ((uint8_t*)this)[0] & uint8_t(128);
+	}
+
+	void set_compact_flag()
+	{
+		((uint8_t*)this)[0] = ((uint8_t*)this)[0] | uint8_t(128);
+	}
 };
-
-
-
-/// constructor: default
-template<class T, size_t compact_max_size, typename small_size_type, class allocator_type, class full_storage>
-compact_vector<T, compact_max_size, small_size_type, allocator_type, full_storage>::
-compact_vector(const allocator_type& alloc = allocator_type())
-{
-}
-
-
-/// constructor: default
-template<class T, size_t compact_max_size, typename small_size_type, class allocator_type, class full_storage>
-compact_vector<T, compact_max_size, small_size_type, allocator_type, full_storage>::
-compact_vector(size_t n)
-{
-}
 
 #endif // compact_vector_h__
