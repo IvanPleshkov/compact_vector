@@ -43,18 +43,16 @@ public:
 
 		T* get(size_t i) noexcept
 		{
-			return buffer[i];
+			return &buffer[i];
 		}
 
 		const T* get(size_t i) const noexcept
 		{
-			return buffer[i];
+			return &buffer[i];
 		}
 	};
 
 	// Empty Base Optimization
-	// хак оптимизации памяти. Промежуточный класс позволяет не использовать лишнюю память в случае
-	// sizeof(allocator_type) == 0
 	struct size_allocator_pair : public allocator_type
 	{
 		size_allocator_pair(const allocator_type& base) :
@@ -77,14 +75,19 @@ public:
 			return this;
 		}
 
-		size_t get_size()
+		const allocator_type* get_allocator() const
+		{
+			return this;
+		}
+
+		size_t get_size() const noexcept
 		{
 			return size & vector_max_size;
 		}
 
-		bool is_compact()
+		bool is_compact() const noexcept
 		{
-			return !(bool)(size >> (sizeof(size_t) - 1));
+			return !(bool)(size >> (8 * sizeof(size_t) - 1));
 		}
 
 		void set_size(size_t new_size, bool is_compact)
@@ -95,7 +98,7 @@ public:
 #endif
 
 			size = !is_compact;
-			size = size << (sizeof(size_t) - 1);
+			size = size << (8 * sizeof(size_t) - 1);
 			size = size | new_size;
 		}
 
@@ -114,8 +117,8 @@ public:
 public:
 	using iterator = T*;
 	using const_iterator = const T*;
-	using reverse_iterator = T*;
-	using const_reverse_iterator = const T*;
+	using reverse_iterator = T*; // todo
+	using const_reverse_iterator = const T*; // todo
 	using this_type = compact_vector<T, compact_max_size, allocator_type>;
 
 	/// constructor: default
@@ -155,14 +158,14 @@ public:
 	compact_vector(InputIterator first, InputIterator last, const allocator_type& alloc = allocator_type()) :
 		size_allocaltor(alloc)
 	{
-		insert(begin(), first, last);
+		// insert(begin(), first, last);
 	}
 
 	/// constructor: copy
 	/*!
 	Constructs a container with a copy of each of the elements in x, in the same order.
 	*/
-	compact_vector(const compact_vector& x) :
+	compact_vector(const this_type& x) :
 		size_allocaltor(x.get_allocator())
 	{
 		
@@ -172,7 +175,7 @@ public:
 	/*!
 	Constructs a container with a copy of each of the elements in x, in the same order.
 	*/
-	compact_vector(const compact_vector& x, const allocator_type& alloc) :
+	compact_vector(const this_type& x, const allocator_type& alloc) :
 		size_allocaltor(alloc)
 	{
 		// todo
@@ -185,8 +188,8 @@ public:
 	Otherwise, no elements are constructed (their ownership is directly transferred).
 	x is left in an unspecified but valid state.
 	*/
-	compact_vector(compact_vector&& x) :
-		size_allocaltor(std::move(*x.size_allocaltor.get_allocator()))
+	compact_vector(this_type&& x) :
+		size_allocaltor(x.get_allocator())
 	{
 		swap(x);
 	}
@@ -198,7 +201,7 @@ public:
 	Otherwise, no elements are constructed (their ownership is directly transferred).
 	x is left in an unspecified but valid state.
 	*/
-	compact_vector(compact_vector&& x, const allocator_type& alloc) :
+	compact_vector(this_type&& x, const allocator_type& alloc) :
 		size_allocaltor(alloc)
 	{
 		swap(x);
@@ -222,18 +225,30 @@ public:
 
 	/// assign: range
 	template <class InputIterator>
-	void assign(InputIterator first, InputIterator last);
+	void assign(InputIterator first, InputIterator last)
+	{
+		clear();
+		insert(begin(), first, last);
+	}
 
 	/// assign: fill
-	void assign(size_t n, const T& val);
+	void assign(size_t n, const T& val)
+	{
+		clear();
+		resize(n, val);
+	}
 
 	/// assign: initializer list
-	void assign(std::initializer_list<T> il);
+	void assign(std::initializer_list<T> il)
+	{
+		clear();
+		insert(begin(), il);
+	}
 
 	T& at(size_t n)
 	{
 		if (n >= size())
-			throw std::out_of_range();
+			throw std::out_of_range(u8"compact_vector out of range");
 
 		return (*this)[n];
 	}
@@ -241,7 +256,7 @@ public:
 	const T& at(size_t n) const
 	{
 		if (n >= size())
-			throw std::out_of_range();
+			throw std::out_of_range(u8"compact_vector out of range");
 
 		return (*this)[n];
 	}
@@ -279,18 +294,32 @@ public:
 		return full.capacity;
 	}
 
-	const_iterator cbegin() const noexcept;
+	const_iterator cbegin() const noexcept
+	{
+		if (is_compact())
+			return compact.get(0);
+		else
+			return full.get(0);
+	}
 
-	const_iterator cend() const noexcept;
+	const_iterator cend() const noexcept
+	{
+		if (is_compact())
+			return compact.get(size() - 1);
+		else
+			return full.get(size() - 1);
+	}
 
 	void clear() noexcept
 	{
-		destruct();
+		call_destructors(begin(), end());
+
+		size_allocaltor.set_size(0, is_compact());
 	}
 
-	const_reverse_iterator crbegin() const noexcept;
+	const_reverse_iterator crbegin() const noexcept; // todo
 
-	const_reverse_iterator crend() const noexcept;
+	const_reverse_iterator crend() const noexcept; // todo
 
 	T* data() noexcept
 	{
@@ -303,10 +332,10 @@ public:
 	}
 
 	template <class... Args>
-	iterator emplace(const_iterator position, Args&&... args);
+	iterator emplace(const_iterator position, Args&&... args); // todo
 
 	template <class... Args>
-	void emplace_back(Args&&... args);
+	void emplace_back(Args&&... args); // todo
 
 	bool empty() const noexcept
 	{
@@ -316,9 +345,9 @@ public:
 	iterator end() noexcept
 	{
 		if (is_compact())
-			return compact.get(size() - 1);
+			return compact.get(size());
 		else
-			return full.get(size() - 1);
+			return full.get(size());
 	}
 
 	const_iterator end() const noexcept
@@ -329,11 +358,25 @@ public:
 			return full.get(size() - 1);
 	}
 
-	iterator erase(const_iterator position);
+	iterator erase(const_iterator position)
+	{
+		iterator p = const_cast<iterator>(position);
+
+		// todo
+		return p;
+	}
+
 	iterator erase(const_iterator first, const_iterator last);
 
-	T& front();
-	const T& front() const;
+	T& front()
+	{
+		return *begin();
+	}
+
+	const T& front() const
+	{
+		return *begin();
+	}
 
 	allocator_type get_allocator() const noexcept
 	{
@@ -341,20 +384,20 @@ public:
 	}
 
 	/// insert: single element
-	iterator insert(const_iterator position, const T& val);
+	iterator insert(const_iterator position, const T& val); // todo
 
 	/// insert: fill
-	iterator insert(const_iterator position, size_t n, const T& val);
+	iterator insert(const_iterator position, size_t n, const T& val); // todo
 
 	/// insert: range
 	template <class InputIterator>
-	iterator insert(const_iterator position, InputIterator first, InputIterator last);
+	iterator insert(const_iterator position, InputIterator first, InputIterator last); // todo
 
 	/// insert: move
-	iterator insert(const_iterator position, T&& val);
+	iterator insert(const_iterator position, T&& val); // todo
 
 	/// initializer list
-	iterator insert(const_iterator position, std::initializer_list<T> il);
+	iterator insert(const_iterator position, std::initializer_list<T> il); // todo
 
 	size_t max_size() const noexcept
 	{
@@ -373,17 +416,17 @@ public:
 	T& operator[] (size_t n)
 	{
 		if (is_compact())
-			return compact.get(n);
+			return *compact.get(n);
 		else
-			return full.get(n);
+			return *full.get(n);
 	}
 
 	const T& operator[] (size_t n) const
 	{
 		if (is_compact())
-			return compact.get(n);
+			return *compact.get(n);
 		else
-			return full.get(n);
+			return *full.get(n);
 	}
 
 	void pop_back()
@@ -391,14 +434,31 @@ public:
 		resize(size() - 1);
 	}
 
-	void push_back(const T& val);
-	void push_back(T&& val);
+	void push_back(const T& val)
+	{
+		auto size = size() + 1;
+		if (size > capacity())
+			reserve(2 * capacity());
 
-	reverse_iterator rbegin() noexcept;
-	const_reverse_iterator rbegin() const noexcept;
+		::new(end()) T(val);
+		set_new_size(size);
+	}
 
-	reverse_iterator rend() noexcept;
-	const_reverse_iterator rend() const noexcept;
+	void push_back(T&& val)
+	{
+		auto size = size() + 1;
+		if (size > capacity())
+			reserve(2 * capacity());
+
+		::new(end()) T(val);
+		set_new_size(size);
+	}
+
+	reverse_iterator rbegin() noexcept; // todo
+	const_reverse_iterator rbegin() const noexcept; // todo
+
+	reverse_iterator rend() noexcept; // todo
+	const_reverse_iterator rend() const noexcept; // todo
 
 	void reserve(size_t n)
 	{
@@ -415,12 +475,17 @@ public:
 	{
 		if (n > size())
 		{
-			// todo
+			size_t c = capacity();
+			while (n > c) c = 2 * c;
+			
+			reserve(c);
+
+			add_to_end(n);
 		}
 		else
 		{
 			call_destructors(begin() + n, end());
-			allocator_type.set_size(n, is_compact());
+			this->size_allocaltor.set_size(n, is_compact());
 		}
 	}
 
@@ -428,12 +493,17 @@ public:
 	{
 		if (n > size())
 		{
-			// todo
+			size_t c = capacity();
+			while (n > c) c = 2 * c;
+
+			reserve(c);
+			
+			add_to_end(n, val);
 		}
 		else
 		{
 			call_destructors(begin() + n, end());
-			allocator_type.set_size(n, is_compact());
+			this->size_allocaltor.set_size(n, is_compact());
 		}
 	}
 
@@ -444,18 +514,18 @@ public:
 
 	size_t size() const noexcept
 	{
-		return size_allocaltor.get_size();
+		return this->size_allocaltor.get_size();
 	}
 
 	void swap(compact_vector& x)
 	{
-		
+		// todo
 	}
 
 //private:
 public:
 
-	bool is_compact() noexcept
+	bool is_compact() const noexcept
 	{
 		return size_allocaltor.is_compact();
 	}
@@ -466,7 +536,7 @@ public:
 
 		if (!is_compact())
 			get_allocator().deallocate(full.begin, full.capacity);
-		size_allocaltor.set_size(0, 0);
+		size_allocaltor.set_size(0, true);
 	}
 
 	template<typename InputIterator>
@@ -496,7 +566,7 @@ public:
 #ifdef COMPACT_VECTOR_DEBUG
 		if (new_size <= capacity())
 			throw std::exception(u8"попытка уменьшить размер вектора");
-#endif
+#endif // COMPACT_VECTOR_DEBUG
 
 		auto ptr_begin = get_allocator().allocate(new_size);
 		move_data(begin(), end(), ptr_begin);
@@ -507,14 +577,81 @@ public:
 
 		full.begin = ptr_begin;
 		full.capacity = new_size;
+
+		if (is_compact())
+			this->size_allocaltor.set_size(size(), false);
 	}
 
-	template<typename InputIterator>
-	static void move_data(InputIterator first, InputIterator last, InputIterator target)
+	void add_to_end(size_t n)
+	{
+#ifdef COMPACT_VECTOR_DEBUG
+		if (size() > n)
+			throw new std::exception(u8"попытка увеличить вектор на отрицательное число");
+#endif // COMPACT_VECTOR_DEBUG
+
+		auto end_ptr = end();
+		for (auto i = n - size(); i > 0; i--, end_ptr++)
+			::new (end_ptr) T();
+
+		set_new_size(n);
+	}
+
+	void add_to_end(size_t n, const T& val)
+	{
+#ifdef COMPACT_VECTOR_DEBUG
+		if (size() > n)
+			throw new std::exception(u8"попытка увеличить вектор на отрицательное число");
+#endif // COMPACT_VECTOR_DEBUG
+
+		auto end_ptr = end();
+		for (auto i = n - size(); i > 0; i--, end_ptr++)
+			::new (end_ptr) T(val);
+
+		set_new_size(n);
+	}
+
+	void set_new_size(size_t new_size)
+	{
+		this->size_allocaltor.set_size(new_size, is_compact());
+	}
+
+	static void move_data(iterator first, iterator last, iterator target)
+	{
+		move_data(first, last, target, std::is_trivially_copyable<T>::type());
+	}
+
+	// для тривиальных типов можно использовать memcpy
+	static void move_data(iterator first, iterator last, iterator target, std::integral_constant<bool, true>)
+	{
+		std::memcpy(target, first, last - first);
+	}
+
+	// для нетривиальных типов вызывается std::move
+	static void move_data(iterator first, iterator last, iterator target, std::integral_constant<bool, false>)
 	{
 		for (; first != last; first++, target++)
 		{
 			*target = std::move(*first);
+		}
+	}
+
+	static void copy_data(const_iterator first, const_iterator last, iterator target)
+	{
+		copy_data(first, last, target, std::is_trivially_copyable<T>::type());
+	}
+
+	// для тривиальных типов можно использовать memcpy
+	static void copy_data(const_iterator first, const_iterator last, iterator target, std::integral_constant<bool, true>)
+	{
+		std::memcpy(target, first, last - first);
+	}
+
+	// для нетривиальных типов вызывается std::move
+	static void copy_data(const_iterator first, const_iterator last, iterator target, std::integral_constant<bool, false>)
+	{
+		for (; first != last; first++, target++)
+		{
+			*target = *first;
 		}
 	}
 };
