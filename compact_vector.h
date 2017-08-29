@@ -1,7 +1,5 @@
 ﻿#pragma once
 
-#define COMPACT_VECTOR_DEBUG
-
 #include <cstddef>
 #include <memory>
 #include <utility>
