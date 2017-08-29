@@ -340,7 +340,18 @@ public:
 	iterator emplace(const_iterator position, Args&&... args); // todo
 
 	template <class... Args>
-	void emplace_back(Args&&... args); // todo
+	void emplace_back(Args&&... args)
+	{
+		static const size_t args_size = sizeof...(Args); 
+
+		size_t c = capacity();
+		size_t required_size = size() + args_size;
+		while (required_size > c) c = 2 * c;
+		reserve(c);
+
+		::new(end()) value_type(std::forward<Args>(args)...);
+		set_new_size(required_size);
+	}
 
 	bool empty() const noexcept
 	{
@@ -369,7 +380,7 @@ public:
 		iterator e = end();
 
 		if (p <= e)
-			copy_data(p + 1, e, p); // todo: переделать на семантику перемещения
+			copy_data(p + 1, e, p);
 		e--;
 		e->~T();
 		set_new_size(size() - 1);
@@ -386,7 +397,7 @@ public:
 			return nullptr;
 
 		if (l <= e)
-			copy_data(l, e, f);  // todo: переделать на семантику перемещения
+			copy_data(l, e, f);
 		call_destructors(f + (e - l), e);
 
 		set_new_size(size() - (e - l));
@@ -431,10 +442,25 @@ public:
 	template <class InputIterator>
 	iterator insert(const_iterator position, InputIterator first, InputIterator last)
 	{
-		if (first == last)
+		size_t n = 0;
+		for (InputIterator i = first; i != last; i++, n++);
+
+		if (n == 0)
 			return end();
-		// todo
-		return nullptr;
+
+		size_t p = end() - position;
+		resize(size() + n, *first);
+
+		iterator i = end() - n - 1;
+		iterator j = end() - 1;
+		for (size_t counter = p; counter > 0; counter--, i--, j--)
+			std::iter_swap(i, j);
+
+		i = begin() + p;
+		for (InputIterator j = first; j != last; j++, i++)
+			*i = *j;
+
+		return begin() + p;
 	}
 
 	/// insert: move
